@@ -6,10 +6,11 @@ import ru.hse.exception.DataLoadException;
 import ru.hse.exception.DataSaveException;
 
 import java.io.*;
+import java.util.List;
 
 public class FileRepository {
 
-    public void saveEmployees(Employee[] employees) throws DataSaveException {
+    public void saveEmployees(List<Employee> employees) throws DataSaveException {
         try {
             createBackup("employees.dat");
             ObjectOutputStream out =
@@ -23,12 +24,12 @@ public class FileRepository {
         }
     }
 
-    public Employee[] loadEmployees() throws DataLoadException {
+    public List<Employee> loadEmployees() throws DataLoadException {
         try {
             ObjectInputStream in =
                     new ObjectInputStream(new FileInputStream("employees.dat"));
 
-            Employee[] employees = (Employee[]) in.readObject();
+            List<Employee> employees = (List<Employee>) in.readObject();
             in.close();
 
             return employees;
@@ -38,7 +39,7 @@ public class FileRepository {
         }
     }
 
-    public void saveTasks(Task[] tasks) throws DataSaveException {
+    public void saveTasks(List<Task> tasks) throws DataSaveException {
         try {
             createBackup("tasks.dat");
             ObjectOutputStream out =
@@ -52,12 +53,12 @@ public class FileRepository {
         }
     }
 
-    public Task[] loadTasks() throws DataLoadException {
+    public List<Task> loadTasks() throws DataLoadException {
         try {
             ObjectInputStream in =
                     new ObjectInputStream(new FileInputStream("tasks.dat"));
 
-            Task[] tasks = (Task[]) in.readObject();
+            List<Task> tasks = (List<Task>) in.readObject();
             in.close();
 
             return tasks;
