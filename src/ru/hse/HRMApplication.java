@@ -1,6 +1,7 @@
 package ru.hse;
 import ru.hse.model.*;
 import ru.hse.presentation.Reporter;
+import ru.hse.security.SecurityService;
 import ru.hse.service.HRMService;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -87,6 +88,7 @@ public class HRMApplication {
         repository.saveEmployee(director1);
 
         HRMService hrmService = new HRMService(repository);
+        SecurityService securityService = new SecurityService();
 
 
         java.io.File employeesFile = new java.io.File("employees.dat");
@@ -97,7 +99,7 @@ public class HRMApplication {
         }
 
 
-        Reporter reporter = new Reporter(hrmService);
+        Reporter reporter = new Reporter(hrmService, securityService);
 
         boolean debugMode = false;
 

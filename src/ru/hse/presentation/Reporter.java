@@ -6,19 +6,40 @@ import ru.hse.model.Employee;
 import ru.hse.model.Programmer;
 import ru.hse.model.Task;
 import ru.hse.service.HRMService;
-
+import ru.hse.security.SecurityService;
+import ru.hse.security.User;
 import java.util.List;
+import java.util.Map;
 import java.util.Scanner;
+import ru.hse.security.Permission;
 
 public class Reporter {
     private HRMService hrmService;
+    private SecurityService securityService;
+    private User currentUser;
 
-    public Reporter(HRMService hrmService) {
+    public Reporter(HRMService hrmService, SecurityService securityService) {
         this.hrmService = hrmService;
+        this.securityService = securityService;
     }
 
     public void show() {
         Scanner scanner = new Scanner(System.in);
+
+        System.out.print("Login: ");
+        String username = scanner.nextLine();
+
+        System.out.print("Password: ");
+        String password = scanner.nextLine();
+
+        currentUser = securityService.login(username, password);
+
+        if (currentUser == null) {
+            System.out.println("Invalid login or password");
+            return;
+        }
+
+        System.out.println("Welcome, " + currentUser.getUsername());
 
         while (true) {
             System.out.println("=== HRM System Menu ===");
@@ -35,7 +56,10 @@ public class Reporter {
             System.out.println("11. Complete task");
             System.out.println("12. Save data");
             System.out.println("13. Load data");
-            System.out.println("14. Exit");
+            System.out.println("14. Employee count by position");
+            System.out.println("15. Employee with max salary");
+            System.out.println("16. Average salary by position");
+            System.out.println("17. Exit");
 
             int choice;
 
@@ -110,6 +134,18 @@ public class Reporter {
                 hrmService.printEmployeesWithExperienceMoreThan(n);
             }
 
+            if (
+                    choice == 7
+                            &&
+                            !securityService.hasPermission(
+                                    currentUser,
+                                    Permission.ADD_EMPLOYEE
+                            )
+            ) {
+                System.out.println("Access denied");
+                continue;
+            }
+
             if (choice == 7) {
                 System.out.println("Choose employee type:");
                 System.out.println("1. Manager");
@@ -168,6 +204,18 @@ public class Reporter {
                 }
             }
 
+            if (
+                    choice == 8
+                            &&
+                            !securityService.hasPermission(
+                                    currentUser,
+                                    Permission.REMOVE_EMPLOYEE
+                            )
+            ) {
+                System.out.println("Access denied");
+                continue;
+            }
+
             if (choice == 8) {
                 System.out.print("Enter employee id: ");
                 Long id = Long.parseLong(scanner.nextLine());
@@ -178,6 +226,18 @@ public class Reporter {
                 } catch (EmployeeNotFoundException e) {
                     System.out.println("Employee not found");
                 }
+            }
+
+            if (
+                    choice == 9
+                            &&
+                            !securityService.hasPermission(
+                                    currentUser,
+                                    Permission.UPDATE_SALARY
+                            )
+            ) {
+                System.out.println("Access denied");
+                continue;
             }
 
             if (choice == 9) {
@@ -195,6 +255,18 @@ public class Reporter {
                 } catch (InvalidDataException e) {
                     System.out.println("Invalid salary");
                 }
+            }
+
+            if (
+                    choice == 10
+                            &&
+                            !securityService.hasPermission(
+                                    currentUser,
+                                    Permission.ASSIGN_TASK
+                            )
+            ) {
+                System.out.println("Access denied");
+                continue;
             }
 
             if (choice == 10) {
@@ -233,6 +305,18 @@ public class Reporter {
                 System.out.println("Task assigned successfully");
             }
 
+            if (
+                    choice == 11
+                            &&
+                            !securityService.hasPermission(
+                                    currentUser,
+                                    Permission.COMPLETE_TASK
+                            )
+            ) {
+                System.out.println("Access denied");
+                continue;
+            }
+
             if (choice == 11) {
                 System.out.print("Enter task id: ");
                 Long taskId = Long.parseLong(scanner.nextLine());
@@ -255,8 +339,38 @@ public class Reporter {
                 System.out.println("Data loaded successfully");
             }
 
-            if (choice == 14) {
+            if (choice == 17) {
                 break;
+            }
+            if (choice == 15) {
+
+                Employee employee = hrmService.findEmployeeWithMaxSalary();
+
+                if (employee != null) {
+                    System.out.println(employee);
+                }
+            }
+            if (choice == 16) {
+
+                System.out.print("Enter position: ");
+                String position = scanner.nextLine();
+
+                double averageSalary =
+                        hrmService.getAverageSalaryByPosition(position);
+
+                System.out.println("Average salary: " + averageSalary);
+            }
+            if (choice == 14) {
+
+                Map<String, Long> counts =
+                        hrmService.getEmployeeCountByPosition();
+
+                for (Map.Entry<String, Long> entry : counts.entrySet()) {
+
+                    System.out.println(
+                            entry.getKey() + ": " + entry.getValue()
+                    );
+                }
             }
         }
     }
