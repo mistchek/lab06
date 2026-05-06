@@ -7,6 +7,7 @@ import ru.hse.exception.DataSaveException;
 
 import java.io.*;
 import java.util.List;
+import java.util.Map;
 
 public class FileRepository {
 
@@ -67,6 +68,39 @@ public class FileRepository {
             throw new DataLoadException("Ошибка загрузки задач");
         }
     }
+
+    public void saveProgrammerTasks(Map<Long, List<Long>> programmerTasks) throws DataSaveException {
+        try {
+            createBackup("programmerTasks.dat");
+
+            ObjectOutputStream out =
+                    new ObjectOutputStream(new FileOutputStream("programmerTasks.dat"));
+
+            out.writeObject(programmerTasks);
+            out.close();
+
+        } catch (IOException e) {
+            throw new DataSaveException("Ошибка сохранения связей задач");
+        }
+    }
+
+    public Map<Long, List<Long>> loadProgrammerTasks() throws DataLoadException {
+        try {
+            ObjectInputStream in =
+                    new ObjectInputStream(new FileInputStream("programmerTasks.dat"));
+
+            Map<Long, List<Long>> programmerTasks =
+                    (Map<Long, List<Long>>) in.readObject();
+
+            in.close();
+
+            return programmerTasks;
+
+        } catch (Exception e) {
+            throw new DataLoadException("Ошибка загрузки связей задач");
+        }
+    }
+
     private void createBackup(String fileName) {
         File originalFile = new File(fileName);
 

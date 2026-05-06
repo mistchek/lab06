@@ -9,7 +9,7 @@ import ru.hse.model.Manager;
 import ru.hse.model.Programmer;
 import ru.hse.model.Task;
 import ru.hse.model.State;
-import ru.hse.service.HRMService;
+import ru.hse.repository.CollectionRepository;
 import ru.hse.util.Logger;
 
 public class HRMApplication {
@@ -71,9 +71,22 @@ public class HRMApplication {
                 new Manager[]{manager1}
         );
 
-        Employee[] employees = new Employee[]{programmer1, programmer2, manager1, director1};
+        CollectionRepository repository = new CollectionRepository();
 
-        HRMService hrmService = new HRMService(employees);
+        repository.saveTask(task1);
+        repository.saveTask(task2);
+        repository.saveTask(task3);
+
+        repository.assignTaskToProgrammer(programmer1.getId(), task1.getId());
+        repository.assignTaskToProgrammer(programmer1.getId(), task2.getId());
+        repository.assignTaskToProgrammer(programmer2.getId(), task3.getId());
+
+        repository.saveEmployee(programmer1);
+        repository.saveEmployee(programmer2);
+        repository.saveEmployee(manager1);
+        repository.saveEmployee(director1);
+
+        HRMService hrmService = new HRMService(repository);
 
 
         java.io.File employeesFile = new java.io.File("employees.dat");
@@ -106,7 +119,7 @@ public class HRMApplication {
         int managersCount = 0;
         int programmersCount = 0;
 
-        for (Employee employee : hrmService.getEmployees()) {
+        for (Employee employee : hrmService.getRepository().findAllEmployees()) {
             if (employee instanceof Manager) {
                 managersCount++;
             }
@@ -118,7 +131,7 @@ public class HRMApplication {
         int doneTasks = 0;
         int inProgressTasks = 0;
 
-        for (Task task : hrmService.getTasks()) {
+        for (Task task : hrmService.getRepository().findAllTasks()) {
             if (task.getState() == State.DONE) {
                 doneTasks++;
             }

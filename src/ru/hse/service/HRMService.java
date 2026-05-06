@@ -8,6 +8,8 @@ import ru.hse.model.Manager;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.math.BigDecimal;
+import java.util.List;
+
 import ru.hse.model.State;
 import ru.hse.repository.FileRepository;
 import ru.hse.exception.DataSaveException;
@@ -17,6 +19,12 @@ import ru.hse.exception.EmployeeNotFoundException;
 import ru.hse.exception.TaskNotFoundException;
 import ru.hse.exception.InvalidDataException;
 import ru.hse.repository.CollectionRepository;
+
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 
 public class HRMService {
 
@@ -77,6 +85,35 @@ public class HRMService {
         Logger.info("Salary updated");
     }
 
+    public double getAverageSalaryByPosition(String position) {
+
+        return this.repository.findAllEmployees()
+                .stream()
+                .filter(employee -> employee.getPosition().equalsIgnoreCase(position))
+                .map(Employee::getSalary)
+                .mapToDouble(BigDecimal::doubleValue)
+                .average()
+                .orElse(0);
+    }
+
+    public Employee findEmployeeWithMaxSalary() {
+
+        return this.repository.findAllEmployees()
+                .stream()
+                .max((e1, e2) -> e1.getSalary().compareTo(e2.getSalary()))
+                .orElse(null);
+    }
+
+    public Map<String, Long> getEmployeeCountByPosition() {
+
+        return this.repository.findAllEmployees()
+                .stream()
+                .collect(Collectors.groupingBy(
+                        Employee::getPosition,
+                        Collectors.counting()
+                ));
+    }
+
     public void assignTaskToProgrammer(Long programmerId, Task task) {
 
         if (task == null) {
@@ -116,8 +153,9 @@ public class HRMService {
         FileRepository repository = new FileRepository();
 
         try {
-            repository.saveEmployees(employees);
-            repository.saveTasks(tasks);
+            repository.saveEmployees(this.repository.findAllEmployees());
+            repository.saveTasks(this.repository.findAllTasks());
+            repository.saveProgrammerTasks(this.repository.getProgrammerTasks());
             Logger.info("Data saved successfully");
 
         } catch (DataSaveException e) {
@@ -131,8 +169,15 @@ public class HRMService {
         FileRepository repository = new FileRepository();
 
         try {
-            employees = repository.loadEmployees();
-            tasks = repository.loadTasks();
+            for (Employee employee : repository.loadEmployees()) {
+                this.repository.saveEmployee(employee);
+            }
+
+            for (Task task : repository.loadTasks()) {
+                this.repository.saveTask(task);
+            }
+            this.repository.setProgrammerTasks(repository.loadProgrammerTasks());
+
             Logger.info("Data loaded successfully");
 
         } catch (DataLoadException e) {
@@ -140,9 +185,8 @@ public class HRMService {
             Logger.error("Error while loading data");
         }
     }
-
     public void printAllEmployees() {
-        for (Employee employee : employees) {
+            for (Employee employee : this.repository.findAllEmployees()) {
             System.out.printf("Id: %03d%n", employee.getId());
             System.out.printf("Name: %s%n", employee.getName());
             System.out.printf("HireDate: %s%n", employee.getHireDate());
@@ -151,8 +195,15 @@ public class HRMService {
             System.out.println();
         }
     }
+
+    public Map<Grade, List<Programmer>> getProgrammersGroupedByGrade() {
+        return this.repository.findAllProgrammers()
+                .stream()
+                .collect(Collectors.groupingBy(Programmer::getGrade));
+    }
+
     public void printProgrammersByGrade(Grade grade){
-        for (Employee employee: employees){
+            for (Employee employee : this.repository.findAllEmployees()) {
             if (employee instanceof Programmer) {
                 Programmer programmer = (Programmer) employee;
                 if (programmer.getGrade() == grade) {
@@ -166,17 +217,12 @@ public class HRMService {
             }
         }
     }
-    public Task[] getTasksByEmployeeId(Long employeeId) {
-        for (Employee employee : employees) {
-            if (employee.getId().equals(employeeId) && employee instanceof Programmer) {
-                Programmer programmer = (Programmer) employee;
-                return programmer.getTasks();
-            }
-        }
-        return null;
+    public List<Task> getTasksByEmployeeId(Long employeeId) {
+        return this.repository.getTasksByProgrammer(employeeId);
     }
+
     public Programmer getProgrammerByTaskIdAndManagerId(Long taskId, Long managerId) {
-        for (Employee employee : employees) {
+            for (Employee employee : this.repository.findAllEmployees()) {
             if (employee.getId().equals(managerId) && employee instanceof Manager) {
                 Manager manager = (Manager) employee;
 
@@ -191,10 +237,18 @@ public class HRMService {
         }
         return null;
     }
+
+    public List<Employee> getEmployeesWithExperienceMoreThan(int years) {
+        return this.repository.findAllEmployees()
+                .stream()
+                .filter(employee -> ChronoUnit.YEARS.between(employee.getHireDate(), LocalDate.now()) > years)
+                .collect(Collectors.toList());
+    }
+
     public void printEmployeesWithExperienceMoreThan(int n) {
         boolean found = false;
 
-        for (Employee employee : employees) {
+            for (Employee employee : this.repository.findAllEmployees()) {
 
             long experience = ChronoUnit.YEARS.between(
                     employee.getHireDate(),
@@ -228,7 +282,7 @@ public class HRMService {
         }
     }
     public void printOverdueTasks() {
-        for (Employee employee : employees) {
+            for (Employee employee : this.repository.findAllEmployees()) {
             if (employee instanceof Programmer) {
                 Programmer programmer = (Programmer) employee;
 

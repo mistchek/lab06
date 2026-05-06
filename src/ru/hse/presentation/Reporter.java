@@ -6,6 +6,8 @@ import ru.hse.model.Employee;
 import ru.hse.model.Programmer;
 import ru.hse.model.Task;
 import ru.hse.service.HRMService;
+
+import java.util.List;
 import java.util.Scanner;
 
 public class Reporter {
@@ -50,7 +52,7 @@ public class Reporter {
 
             if (choice == 2) {
                 System.out.println("Enter grade:");
-                String gradeInput = scanner.next();
+                String gradeInput = scanner.nextLine();
                 hrmService.printProgrammersByGrade(
                         ru.hse.model.Grade.valueOf(gradeInput)
                 );
@@ -64,7 +66,7 @@ public class Reporter {
                 System.out.print("Введите id сотрудника: ");
                 Long employeeId = Long.parseLong(scanner.nextLine());
 
-                Task[] tasks = hrmService.getTasksByEmployeeId(employeeId);
+                List<Task> tasks = hrmService.getTasksByEmployeeId(employeeId);
 
                 if (tasks != null) {
                     for (Task task : tasks) {

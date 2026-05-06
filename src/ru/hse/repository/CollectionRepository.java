@@ -121,7 +121,12 @@ public class CollectionRepository {
 
         managerProgrammers.get(managerId).add(programmerId);
     }
-
+    public Map<Long, List<Long>> getProgrammerTasks() {
+        return programmerTasks;
+    }
+    public void setProgrammerTasks(Map<Long, List<Long>> programmerTasks) {
+        this.programmerTasks = programmerTasks;
+    }
 
     public List<Programmer> getProgrammersByManager(Long managerId) {
 
