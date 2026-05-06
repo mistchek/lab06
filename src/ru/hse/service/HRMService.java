@@ -16,35 +16,22 @@ import ru.hse.util.Logger;
 import ru.hse.exception.EmployeeNotFoundException;
 import ru.hse.exception.TaskNotFoundException;
 import ru.hse.exception.InvalidDataException;
+import ru.hse.repository.CollectionRepository;
 
 public class HRMService {
-    private Employee[] employees;
-    private Task[] tasks;
 
-    public HRMService(Employee[] employees, Task[] tasks) {
-        this.employees = employees;
-        this.tasks = tasks;
+    private CollectionRepository repository;
+
+    public HRMService(CollectionRepository repository) {
+        this.repository = repository;
     }
 
-    public HRMService(Employee[] employees) {
-        this.employees = employees;
-        this.tasks = new Task[0];
+    public CollectionRepository getRepository() {
+        return repository;
     }
 
-    public Employee[] getEmployees() {
-        return employees;
-    }
-
-    public void setEmployees(Employee[] employees) {
-        this.employees = employees;
-    }
-
-    public Task[] getTasks() {
-        return tasks;
-    }
-
-    public void setTasks(Task[] tasks) {
-        this.tasks = tasks;
+    public void setRepository(CollectionRepository repository) {
+        this.repository = repository;
     }
 
     public void addEmployee(Employee employee) {
@@ -53,45 +40,21 @@ public class HRMService {
             return;
         }
 
-        Employee[] newEmployees = new Employee[employees.length + 1];
+        repository.saveEmployee(employee);
 
-        for (int i = 0; i < employees.length; i++) {
-            newEmployees[i] = employees[i];
-        }
-
-        newEmployees[employees.length] = employee;
-
-        employees = newEmployees;
         Logger.info("Employee added");
     }
 
     public void removeEmployeeById(Long id) throws EmployeeNotFoundException {
 
-        int index = -1;
+        Employee employee = repository.findEmployeeById(id);
 
-        for (int i = 0; i < employees.length; i++) {
-            if (employees[i].getId().equals(id)) {
-                index = i;
-                break;
-            }
-        }
-
-        if (index == -1) {
+        if (employee == null) {
             throw new EmployeeNotFoundException("Employee not found");
         }
 
-        Employee[] newEmployees = new Employee[employees.length - 1];
+        repository.deleteEmployee(id);
 
-        int j = 0;
-
-        for (int i = 0; i < employees.length; i++) {
-            if (i != index) {
-                newEmployees[j] = employees[i];
-                j++;
-            }
-        }
-
-        employees = newEmployees;
         Logger.info("Employee removed");
     }
 
@@ -102,15 +65,16 @@ public class HRMService {
             throw new InvalidDataException("Invalid salary");
         }
 
-        for (int i = 0; i < employees.length; i++) {
-            if (employees[i].getId().equals(id)) {
-                employees[i].setSalary(newSalary);
-                Logger.info("Salary updated");
-                return;
-            }
+        Employee employee = repository.findEmployeeById(id);
+
+        if (employee == null) {
+            throw new EmployeeNotFoundException("Employee not found");
         }
 
-        throw new EmployeeNotFoundException("Employee not found");
+        employee.setSalary(newSalary);
+        repository.saveEmployee(employee);
+
+        Logger.info("Salary updated");
     }
 
     public void assignTaskToProgrammer(Long programmerId, Task task) {
@@ -119,44 +83,32 @@ public class HRMService {
             return;
         }
 
-        for (int i = 0; i < employees.length; i++) {
-            if (employees[i].getId().equals(programmerId) && employees[i] instanceof Programmer) {
+        Employee employee = repository.findEmployeeById(programmerId);
 
-                Task[] newTasks = new Task[tasks.length + 1];
-
-                for (int j = 0; j < tasks.length; j++) {
-                    newTasks[j] = tasks[j];
-                }
-
-                newTasks[tasks.length] = task;
-                tasks = newTasks;
-                Programmer programmer = (Programmer) employees[i];
-
-                Task[] programmerTasks = programmer.getTasks();
-                Task[] newProgrammerTasks = new Task[programmerTasks.length + 1];
-
-                for (int k = 0; k < programmerTasks.length; k++) {
-                    newProgrammerTasks[k] = programmerTasks[k];
-                }
-
-                newProgrammerTasks[programmerTasks.length] = task;
-                programmer.setTasks(newProgrammerTasks);
-
-                return;
-            }
+        if (!(employee instanceof Programmer)) {
+            return;
         }
+
+        repository.saveTask(task);
+
+        repository.assignTaskToProgrammer(programmerId, task.getId());
+
+        Logger.info("Task assigned");
     }
 
     public void completeTask(Long taskId) throws TaskNotFoundException {
 
-        for (int i = 0; i < tasks.length; i++) {
-            if (tasks[i].getId().equals(taskId)) {
-                tasks[i].setState(State.DONE);
-                Logger.info("Task completed");
-                return;
-            }
+        Task task = repository.findTaskById(taskId);
+
+        if (task == null) {
+            throw new TaskNotFoundException("Task not found");
         }
-        throw new TaskNotFoundException("Task not found");
+
+        task.setState(State.DONE);
+
+        repository.saveTask(task);
+
+        Logger.info("Task completed");
     }
 
     public void saveAllData() {
