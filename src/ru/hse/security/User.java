@@ -2,10 +2,10 @@ package ru.hse.security;
 
 public class User {
 
-    private String username;
-    private String password;
-    private Role role;
-    private Long employeeId;
+    private final String username;
+    private final String password;
+    private final Role role;
+    private final Long employeeId;
 
     public User(String username, String password, Role role, Long employeeId) {
         this.username = username;

@@ -10,7 +10,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class CollectionRepository {
+public class CollectionRepository
+        implements EmployeeRepository,
+        TaskRepository {
 
     private Map<Long, Employee> employees = new HashMap<>();
 
@@ -112,6 +114,24 @@ public class CollectionRepository {
         }
 
         return result;
+    }
+
+    public Programmer getProgrammerByTaskIdAndManagerId(Long taskId, Long managerId) {
+
+        List<Programmer> programmers =
+                getProgrammersByManager(managerId);
+
+        for (Programmer programmer : programmers) {
+
+            for (Task task : programmer.getTasks()) {
+
+                if (task.getId().equals(taskId)) {
+                    return programmer;
+                }
+            }
+        }
+
+        return null;
     }
 
 

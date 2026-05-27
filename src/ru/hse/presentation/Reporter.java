@@ -2,23 +2,25 @@ package ru.hse.presentation;
 import ru.hse.exception.EmployeeNotFoundException;
 import ru.hse.exception.InvalidDataException;
 import ru.hse.exception.TaskNotFoundException;
-import ru.hse.model.Employee;
-import ru.hse.model.Programmer;
-import ru.hse.model.Task;
+import ru.hse.model.*;
 import ru.hse.service.HRMService;
-import ru.hse.security.SecurityService;
+import ru.hse.security.AuthenticationService;
 import ru.hse.security.User;
+import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Scanner;
 import ru.hse.security.Permission;
+import ru.hse.service.ServiceResult;
+import java.time.LocalDate;
 
 public class Reporter {
     private HRMService hrmService;
-    private SecurityService securityService;
+    private AuthenticationService securityService;
     private User currentUser;
 
-    public Reporter(HRMService hrmService, SecurityService securityService) {
+    public Reporter(HRMService hrmService, AuthenticationService securityService) {
         this.hrmService = hrmService;
         this.securityService = securityService;
     }
@@ -32,7 +34,12 @@ public class Reporter {
         System.out.print("Password: ");
         String password = scanner.nextLine();
 
-        currentUser = securityService.login(username, password);
+        try {
+            currentUser = securityService.login(username, password);
+        } catch (InvalidDataException e) {
+            System.out.println("Invalid login or password");
+            return;
+        }
 
         if (currentUser == null) {
             System.out.println("Invalid login or password");
@@ -43,23 +50,49 @@ public class Reporter {
 
         while (true) {
             System.out.println("=== HRM System Menu ===");
-            System.out.println("1. Show all employees");
-            System.out.println("2. Show programmers by grade");
-            System.out.println("3. Show overdue tasks");
-            System.out.println("4. Tasks by employee id");
-            System.out.println("5. Programmer by task id and manager id");
-            System.out.println("6. Employees with experience more than N years");
-            System.out.println("7. Add employee");
-            System.out.println("8. Remove employee");
-            System.out.println("9. Update salary");
-            System.out.println("10. Assign task");
-            System.out.println("11. Complete task");
-            System.out.println("12. Save data");
-            System.out.println("13. Load data");
-            System.out.println("14. Employee count by position");
-            System.out.println("15. Employee with max salary");
-            System.out.println("16. Average salary by position");
-            System.out.println("17. Exit");
+
+            if (currentUser == null) {
+                System.out.println("=== Current user: not logged in ===");
+                System.out.println("14. Login");
+                System.out.println("17. Exit");
+            } else {
+                System.out.printf(
+                        "=== Current user: %s (%s) ===%n",
+                        currentUser.getUsername(),
+                        currentUser.getRole()
+                );
+
+                System.out.println("1. Show all employees");
+                System.out.println("2. Show filter menu (lambda/stream)");
+
+                if (securityService.hasPermission(Permission.EDIT_EMPLOYEES)) {
+                    System.out.println("3. Add new employee");
+                    System.out.println("4. Update employee salary");
+                }
+
+                if (securityService.hasPermission(Permission.DELETE_EMPLOYEES)) {
+                    System.out.println("5. Remove employee by ID");
+                }
+
+                if (securityService.hasPermission(Permission.MANAGE_TASKS)) {
+                    System.out.println("6. Assign task to programmer");
+                    System.out.println("7. Complete task");
+                }
+
+                System.out.println("8. Save data to file");
+                System.out.println("9. Load data from file");
+
+                System.out.println("--- Advanced Reports ---");
+                System.out.println("10. Show employees grouped by grade (Stream)");
+                System.out.println("11. Show average salary by position (Stream)");
+                System.out.println("12. Show employee with max salary (Stream)");
+                System.out.println("13. Show overdue tasks (Stream)");
+
+                System.out.println("--- Security ---");
+                System.out.println("15. Logout");
+                System.out.println("16. Show current user info");
+                System.out.println("17. Exit");
+            }
 
             int choice;
 
@@ -71,87 +104,119 @@ public class Reporter {
             }
 
             if (choice == 1) {
-                hrmService.printAllEmployees();
+
+                ServiceResult<List<Employee>> result =
+                        hrmService.printAllEmployees();
+
+                if (result.isSuccess()) {
+
+                    for (Employee employee : result.getData()) {
+
+                        System.out.printf(
+                                "Id: %03d%n",
+                                employee.getId()
+                        );
+
+                        System.out.printf(
+                                "Name: %s%n",
+                                employee.getName()
+                        );
+
+                        System.out.printf(
+                                "HireDate: %s%n",
+                                employee.getHireDate()
+                        );
+
+                        System.out.printf(
+                                "Position: %s%n",
+                                employee.getPosition()
+                        );
+
+                        System.out.printf(
+                                java.util.Locale.US,
+                                "Salary: %10.2f%n",
+                                employee.getSalary()
+                        );
+
+                        System.out.println();
+                    }
+
+                } else {
+                    System.out.println(
+                            result.getErrorMessage()
+                    );
+                }
             }
 
+
             if (choice == 2) {
-                System.out.println("Enter grade:");
-                String gradeInput = scanner.nextLine();
-                hrmService.printProgrammersByGrade(
-                        ru.hse.model.Grade.valueOf(gradeInput)
-                );
+
+                System.out.println("=== Filter Menu ===");
+                System.out.println("1. Programmers only");
+                System.out.println("2. Employees with high salary");
+                System.out.println("3. Employees with experience > N years");
+
+                int filterChoice =
+                        Integer.parseInt(scanner.nextLine());
+
+                List<Employee> filteredEmployees =
+                        new ArrayList<>();
+
+                if (filterChoice == 1) {
+
+                    filteredEmployees =
+                            hrmService.filterEmployees(
+                                    employee -> employee instanceof Programmer
+                            );
+                }
+
+                if (filterChoice == 2) {
+
+                    System.out.print("Enter minimum salary: ");
+                    BigDecimal minSalary =
+                            new BigDecimal(scanner.nextLine());
+
+                    filteredEmployees =
+                            hrmService.filterEmployees(
+                                    (Employee employee) ->
+                                            employee.getSalary()
+                                                    .compareTo(minSalary) > 0
+                            );
+                }
+
+                if (filterChoice == 3) {
+
+                    System.out.print("Enter years: ");
+                    int years = Integer.parseInt(scanner.nextLine());
+
+                    filteredEmployees =
+                            hrmService.filterEmployees(
+                                    (Employee employee) ->
+                                            employee.getHireDate()
+                                                    .until(LocalDate.now())
+                                                    .getYears() > years
+                            );
+                }
+
+                for (Employee employee : filteredEmployees) {
+
+                    System.out.printf(
+                            "Id: %03d | Name: %s | Position: %s%n",
+                            employee.getId(),
+                            employee.getName(),
+                            employee.getPosition()
+                    );
+                }
             }
 
             if (choice == 3) {
-                hrmService.printOverdueTasks();
-            }
 
-            if (choice == 4) {
-                System.out.print("Введите id сотрудника: ");
-                Long employeeId = Long.parseLong(scanner.nextLine());
-
-                List<Task> tasks = hrmService.getTasksByEmployeeId(employeeId);
-
-                if (tasks != null) {
-                    for (Task task : tasks) {
-                        System.out.printf("Task id: %03d%n", task.getId());
-                        System.out.printf("Task name: %s%n", task.getTaskName());
-                        System.out.printf("Start day: %s%n", task.getStartDay());
-                        System.out.printf("End day: %s%n", task.getEndDay());
-                        System.out.printf("State: %s%n", task.getState());
-                        System.out.println();
-                    }
-                } else {
-                    System.out.println("Сотрудник не найден или задач нет.");
-                }
-            }
-
-            if (choice == 5) {
-                System.out.print("Введите taskId: ");
-                Long taskId = Long.parseLong(scanner.nextLine());
-
-                System.out.print("Введите managerId: ");
-                Long managerId = Long.parseLong(scanner.nextLine());
-
-                Programmer programmer = hrmService.getProgrammerByTaskIdAndManagerId(taskId, managerId);
-
-                if (programmer != null) {
-                    System.out.printf("Id: %03d%n", programmer.getId());
-                    System.out.printf("Name: %s%n", programmer.getName());
-                    System.out.printf("HireDate: %s%n", programmer.getHireDate());
-                    System.out.printf("Position: %s%n", programmer.getPosition());
-                    System.out.printf(java.util.Locale.US, "Salary: %10.2f%n", programmer.getSalary());
-                    System.out.printf("Grade: %s%n", programmer.getGrade());
-                    System.out.println();
-                } else {
-                    System.out.println("Программист не найден.");
-                }
-            }
-
-            if (choice == 6) {
-                System.out.print("Введите N (лет опыта): ");
-                int n = Integer.parseInt(scanner.nextLine());
-                hrmService.printEmployeesWithExperienceMoreThan(n);
-            }
-
-            if (
-                    choice == 7
-                            &&
-                            !securityService.hasPermission(
-                                    currentUser,
-                                    Permission.ADD_EMPLOYEE
-                            )
-            ) {
-                System.out.println("Access denied");
-                continue;
-            }
-
-            if (choice == 7) {
                 System.out.println("Choose employee type:");
                 System.out.println("1. Manager");
                 System.out.println("2. Programmer");
 
-                int employeeType = Integer.parseInt(scanner.nextLine());
+                int employeeType =
+                        Integer.parseInt(scanner.nextLine());
 
                 System.out.print("Enter employee name: ");
                 String name = scanner.nextLine();
@@ -160,218 +225,543 @@ public class Reporter {
                 String position = scanner.nextLine();
 
                 System.out.print("Enter salary: ");
-                java.math.BigDecimal salary = new java.math.BigDecimal(scanner.nextLine());
+                BigDecimal salary =
+                        new BigDecimal(scanner.nextLine());
 
                 System.out.print("Enter hire year: ");
-                int year = Integer.parseInt(scanner.nextLine());
+                int year =
+                        Integer.parseInt(scanner.nextLine());
 
                 System.out.print("Enter hire month: ");
-                int month = Integer.parseInt(scanner.nextLine());
+                int month =
+                        Integer.parseInt(scanner.nextLine());
 
                 System.out.print("Enter hire day: ");
-                int day = Integer.parseInt(scanner.nextLine());
+                int day =
+                        Integer.parseInt(scanner.nextLine());
+
+                LocalDate hireDate =
+                        LocalDate.of(year, month, day);
 
                 if (employeeType == 1) {
-                    ru.hse.model.Manager manager =
-                            new ru.hse.model.Manager(
+
+                    Manager manager =
+                            new Manager(
                                     name,
                                     position,
                                     salary,
-                                    java.time.LocalDate.of(year, month, day),
-                                    new Programmer[0]
+                                    hireDate,
+                                    new ArrayList<>()
                             );
 
-                    hrmService.addEmployee(manager);
-                    System.out.println("Employee added successfully");
-                }
+                    ServiceResult<Employee> result =
+                            hrmService.addEmployee(manager);
 
-                if (employeeType == 2) {
+                    if (result.isSuccess()) {
+                        System.out.println("Employee added successfully");
+                    } else {
+                        System.out.println(result.getErrorMessage());
+                    }
+
+                } else if (employeeType == 2) {
+
                     System.out.print("Enter grade: ");
                     String gradeInput = scanner.nextLine();
 
-                    ru.hse.model.Programmer programmer =
-                            new ru.hse.model.Programmer(
-                                    name,
-                                    position,
-                                    salary,
-                                    java.time.LocalDate.of(year, month, day),
-                                    new Task[0],
-                                    ru.hse.model.Grade.valueOf(gradeInput)
-                            );
+                    try {
+                        Programmer programmer =
+                                new Programmer(
+                                        name,
+                                        position,
+                                        salary,
+                                        hireDate,
+                                        new ArrayList<>(),
+                                        Grade.valueOf(
+                                                gradeInput.toUpperCase()
+                                        )
+                                );
 
-                    hrmService.addEmployee(programmer);
-                    System.out.println("Employee added successfully");
+                        ServiceResult<Employee> result =
+                                hrmService.addEmployee(programmer);
+
+                        if (result.isSuccess()) {
+                            System.out.println("Employee added successfully");
+                        } else {
+                            System.out.println(result.getErrorMessage());
+                        }
+
+                    } catch (IllegalArgumentException e) {
+                        System.out.println("Invalid grade");
+                    }
+
+                } else {
+                    System.out.println("Invalid employee type");
                 }
             }
 
-            if (
-                    choice == 8
-                            &&
-                            !securityService.hasPermission(
-                                    currentUser,
-                                    Permission.REMOVE_EMPLOYEE
-                            )
-            ) {
-                System.out.println("Access denied");
-                continue;
+            if (choice == 4) {
+
+                System.out.print("Enter employee id: ");
+                Long id =
+                        Long.parseLong(scanner.nextLine());
+
+                System.out.print("Enter new salary: ");
+                BigDecimal newSalary =
+                        new BigDecimal(scanner.nextLine());
+
+                ServiceResult<Employee> result =
+                        hrmService.updateSalary(id, newSalary);
+
+                if (result.isSuccess()) {
+                    System.out.println("Salary updated successfully");
+                } else {
+                    System.out.println(result.getErrorMessage());
+                }
+            }
+
+            if (choice == 5) {
+
+                System.out.print("Enter employee id: ");
+                Long id = Long.parseLong(scanner.nextLine());
+
+                ServiceResult<Employee> result =
+                        hrmService.removeEmployeeById(id);
+
+                if (result.isSuccess()) {
+                    System.out.println("Employee removed successfully");
+                } else {
+                    System.out.println(result.getErrorMessage());
+                }
+            }
+
+            if (choice == 6) {
+
+                System.out.print("Enter programmer id: ");
+                Long programmerId =
+                        Long.parseLong(scanner.nextLine());
+
+                System.out.print("Enter task name: ");
+                String taskName =
+                        scanner.nextLine();
+
+                System.out.print("Enter start year: ");
+                int startYear =
+                        Integer.parseInt(scanner.nextLine());
+
+                System.out.print("Enter start month: ");
+                int startMonth =
+                        Integer.parseInt(scanner.nextLine());
+
+                System.out.print("Enter start day: ");
+                int startDay =
+                        Integer.parseInt(scanner.nextLine());
+
+                System.out.print("Enter end year: ");
+                int endYear =
+                        Integer.parseInt(scanner.nextLine());
+
+                System.out.print("Enter end month: ");
+                int endMonth =
+                        Integer.parseInt(scanner.nextLine());
+
+                System.out.print("Enter end day: ");
+                int endDay =
+                        Integer.parseInt(scanner.nextLine());
+
+                Task task =
+                        new Task(
+                                taskName,
+                                LocalDate.of(startYear, startMonth, startDay),
+                                LocalDate.of(endYear, endMonth, endDay),
+                                State.IN_PROGRESS
+                        );
+
+                ServiceResult<Task> result =
+                        hrmService.assignTaskToProgrammer(
+                                programmerId,
+                                task
+                        );
+
+                if (result.isSuccess()) {
+                    System.out.println("Task assigned successfully");
+                } else {
+                    System.out.println(result.getErrorMessage());
+                }
+            }
+
+            if (choice == 7) {
+
+                System.out.print("Enter task id: ");
+                Long taskId =
+                        Long.parseLong(scanner.nextLine());
+
+                ServiceResult<Task> result =
+                        hrmService.completeTask(taskId);
+
+                if (result.isSuccess()) {
+                    System.out.println("Task completed successfully");
+                } else {
+                    System.out.println(result.getErrorMessage());
+                }
             }
 
             if (choice == 8) {
-                System.out.print("Enter employee id: ");
-                Long id = Long.parseLong(scanner.nextLine());
-
-                try {
-                    hrmService.removeEmployeeById(id);
-                    System.out.println("Employee removed successfully");
-                } catch (EmployeeNotFoundException e) {
-                    System.out.println("Employee not found");
-                }
-            }
-
-            if (
-                    choice == 9
-                            &&
-                            !securityService.hasPermission(
-                                    currentUser,
-                                    Permission.UPDATE_SALARY
-                            )
-            ) {
-                System.out.println("Access denied");
-                continue;
-            }
-
-            if (choice == 9) {
-                System.out.print("Enter employee id: ");
-                Long id = Long.parseLong(scanner.nextLine());
-
-                System.out.print("Enter new salary: ");
-                java.math.BigDecimal newSalary = new java.math.BigDecimal(scanner.nextLine());
-
-                try {
-                    hrmService.updateEmployeeSalary(id, newSalary);
-                    System.out.println("Salary updated successfully");
-                } catch (EmployeeNotFoundException e) {
-                    System.out.println("Employee not found");
-                } catch (InvalidDataException e) {
-                    System.out.println("Invalid salary");
-                }
-            }
-
-            if (
-                    choice == 10
-                            &&
-                            !securityService.hasPermission(
-                                    currentUser,
-                                    Permission.ASSIGN_TASK
-                            )
-            ) {
-                System.out.println("Access denied");
-                continue;
-            }
-
-            if (choice == 10) {
-                System.out.print("Enter programmer id: ");
-                Long programmerId = Long.parseLong(scanner.nextLine());
-
-                System.out.print("Enter task name: ");
-                String taskName = scanner.nextLine();
-
-                System.out.print("Enter start year: ");
-                int startYear = Integer.parseInt(scanner.nextLine());
-
-                System.out.print("Enter start month: ");
-                int startMonth = Integer.parseInt(scanner.nextLine());
-
-                System.out.print("Enter start day: ");
-                int startDay = Integer.parseInt(scanner.nextLine());
-
-                System.out.print("Enter end year: ");
-                int endYear = Integer.parseInt(scanner.nextLine());
-
-                System.out.print("Enter end month: ");
-                int endMonth = Integer.parseInt(scanner.nextLine());
-
-                System.out.print("Enter end day: ");
-                int endDay = Integer.parseInt(scanner.nextLine());
-
-                Task task = new Task(
-                        taskName,
-                        java.time.LocalDate.of(startYear, startMonth, startDay),
-                        java.time.LocalDate.of(endYear, endMonth, endDay),
-                        ru.hse.model.State.IN_PROGRESS
-                );
-
-                hrmService.assignTaskToProgrammer(programmerId, task);
-                System.out.println("Task assigned successfully");
-            }
-
-            if (
-                    choice == 11
-                            &&
-                            !securityService.hasPermission(
-                                    currentUser,
-                                    Permission.COMPLETE_TASK
-                            )
-            ) {
-                System.out.println("Access denied");
-                continue;
-            }
-
-            if (choice == 11) {
-                System.out.print("Enter task id: ");
-                Long taskId = Long.parseLong(scanner.nextLine());
-
-                try {
-                    hrmService.completeTask(taskId);
-                    System.out.println("Task completed successfully");
-                } catch (TaskNotFoundException e) {
-                    System.out.println("Task not found");
-                }
-            }
-
-            if (choice == 12) {
                 hrmService.saveAllData();
                 System.out.println("Data saved successfully");
             }
 
-            if (choice == 13) {
+            if (choice == 9) {
                 hrmService.loadAllData();
                 System.out.println("Data loaded successfully");
+            }
+
+            if (choice == 10) {
+
+                System.out.println("Enter grade:");
+                String gradeInput = scanner.nextLine();
+
+                try {
+
+                    ServiceResult<List<Programmer>> result =
+                            hrmService.printProgrammersByGrade(
+                                    Grade.valueOf(
+                                            gradeInput.toUpperCase()
+                                    )
+                            );
+
+                    if (result.isSuccess()) {
+
+                        for (Programmer programmer :
+                                result.getData()) {
+
+                            System.out.printf(
+                                    "Id: %03d%n",
+                                    programmer.getId()
+                            );
+
+                            System.out.printf(
+                                    "Name: %s%n",
+                                    programmer.getName()
+                            );
+
+                            System.out.printf(
+                                    "HireDate: %s%n",
+                                    programmer.getHireDate()
+                            );
+
+                            System.out.printf(
+                                    "Position: %s%n",
+                                    programmer.getPosition()
+                            );
+
+                            System.out.printf(
+                                    java.util.Locale.US,
+                                    "Salary: %10.2f%n",
+                                    programmer.getSalary()
+                            );
+
+                            System.out.printf(
+                                    "Grade: %s%n",
+                                    programmer.getGrade()
+                            );
+
+                            System.out.println();
+                        }
+
+                    } else {
+                        System.out.println(
+                                result.getErrorMessage()
+                        );
+                    }
+
+                } catch (IllegalArgumentException e) {
+                    System.out.println("Invalid grade");
+                }
+            }
+
+            if (choice == 11) {
+
+                System.out.print("Enter position: ");
+                String position = scanner.nextLine();
+
+                ServiceResult<Double> result =
+                        hrmService.getAverageSalaryByPosition(position);
+
+                if (result.isSuccess()) {
+
+                    System.out.printf(
+                            java.util.Locale.US,
+                            "Average salary: %10.2f%n",
+                            result.getData()
+                    );
+
+                } else {
+
+                    System.out.println(result.getErrorMessage());
+                }
+            }
+
+            if (choice == 12) {
+
+                ServiceResult<Employee> result =
+                        hrmService.findEmployeeWithMaxSalary();
+
+                if (result.isSuccess()) {
+                    Employee employee = result.getData();
+
+                    System.out.printf("Id: %03d%n", employee.getId());
+                    System.out.printf("Name: %s%n", employee.getName());
+                    System.out.printf("HireDate: %s%n", employee.getHireDate());
+                    System.out.printf("Position: %s%n", employee.getPosition());
+                    System.out.printf(
+                            java.util.Locale.US,
+                            "Salary: %10.2f%n",
+                            employee.getSalary()
+                    );
+
+                    System.out.println();
+                } else {
+                    System.out.println(result.getErrorMessage());
+                }
+            }
+
+            if (choice == 13) {
+
+                ServiceResult<List<Task>> result =
+                        hrmService.printOverdueTasks();
+
+                if (result.isSuccess()) {
+
+                    for (Task task : result.getData()) {
+
+                        System.out.printf("Task id: %03d%n",
+                                task.getId());
+
+                        System.out.printf("Task name: %s%n",
+                                task.getTaskName());
+
+                        System.out.printf("Start day: %s%n",
+                                task.getStartDay());
+
+                        System.out.printf("End day: %s%n",
+                                task.getEndDay());
+
+                        System.out.printf("State: %s%n",
+                                task.getState());
+
+                        System.out.println();
+                    }
+
+                } else {
+
+                    System.out.println(result.getErrorMessage());
+                }
+            }
+
+            if (choice == 14) {
+
+                System.out.print("Login: ");
+                String loginUsername = scanner.nextLine();
+
+                System.out.print("Password: ");
+                String loginPassword = scanner.nextLine();
+
+                try {
+
+                    currentUser =
+                            securityService.login(
+                                    loginUsername,
+                                    loginPassword
+                            );
+
+                    System.out.println(
+                            "Welcome, " +
+                                    currentUser.getUsername()
+                    );
+
+                } catch (InvalidDataException e) {
+
+                    System.out.println(
+                            "Invalid login or password"
+                    );
+                }
+            }
+
+            if (choice == 15) {
+
+                securityService.logout();
+                currentUser = null;
+
+                System.out.println("Logged out successfully");
+            }
+
+            if (choice == 16) {
+
+                if (currentUser == null) {
+                    System.out.println("User is not logged in");
+                } else {
+                    System.out.println("Username: " + currentUser.getUsername());
+                    System.out.println("Role: " + currentUser.getRole());
+                    System.out.println("Employee id: " + currentUser.getEmployeeId());
+                }
             }
 
             if (choice == 17) {
                 break;
             }
-            if (choice == 15) {
 
-                Employee employee = hrmService.findEmployeeWithMaxSalary();
+            //if (choice == 20) {
 
-                if (employee != null) {
-                    System.out.println(employee);
-                }
-            }
-            if (choice == 16) {
+               // System.out.print("Введите id сотрудника: ");
 
-                System.out.print("Enter position: ");
-                String position = scanner.nextLine();
+               // Long employeeId =
+                 //       Long.parseLong(scanner.nextLine());
 
-                double averageSalary =
-                        hrmService.getAverageSalaryByPosition(position);
+              //  ServiceResult<List<Task>> result =
+              //          hrmService.getTasksByEmployeeId(employeeId);
 
-                System.out.println("Average salary: " + averageSalary);
-            }
-            if (choice == 14) {
+                //if (result.isSuccess()) {
 
-                Map<String, Long> counts =
-                        hrmService.getEmployeeCountByPosition();
+                 //   for (Task task : result.getData()) {
 
-                for (Map.Entry<String, Long> entry : counts.entrySet()) {
+                 //       System.out.printf("Task id: %03d%n",
+                           //     task.getId());
 
-                    System.out.println(
-                            entry.getKey() + ": " + entry.getValue()
-                    );
-                }
-            }
+                      //  System.out.printf("Task name: %s%n",
+                      //          task.getTaskName());
+
+                     //   System.out.printf("Start day: %s%n",
+                      //          task.getStartDay());
+
+                       // System.out.printf("End day: %s%n",
+                       //         task.getEndDay());
+
+                      //  System.out.printf("State: %s%n",
+                      //          task.getState());
+
+                      //  System.out.println();
+                  //  }
+
+             //   } else {
+
+              //      System.out.println(result.getErrorMessage());
+              //  }
+          //  }
+
+        //    if (choice == 21) {
+
+          //      System.out.print("Введите taskId: ");
+           //     Long taskId = Long.parseLong(scanner.nextLine());
+
+           //     System.out.print("Введите managerId: ");
+           //     Long managerId = Long.parseLong(scanner.nextLine());
+
+           //     ServiceResult<Programmer> result =
+           //             hrmService.getProgrammerByTaskIdAndManagerId(taskId, managerId);
+
+            //    if (result.isSuccess()) {
+
+             //       Programmer programmer = result.getData();
+
+              //      System.out.printf("Id: %03d%n", programmer.getId());
+             //       System.out.printf("Name: %s%n", programmer.getName());
+              //      System.out.printf("HireDate: %s%n", programmer.getHireDate());
+              //      System.out.printf("Position: %s%n", programmer.getPosition());
+              //      System.out.printf(java.util.Locale.US,
+                  //          "Salary: %10.2f%n",
+                  //          programmer.getSalary());
+                 //   System.out.printf("Grade: %s%n", programmer.getGrade());
+
+                //    System.out.println();
+
+             //   } else {
+             //       System.out.println(result.getErrorMessage());
+             //   }
+          //  }
+
+          //  if (choice == 22) {
+
+          //      System.out.print("Введите N (лет опыта): ");
+
+            //    int n =
+            //            Integer.parseInt(scanner.nextLine());
+
+            //    ServiceResult<List<Employee>> result =
+             //           hrmService.printEmployeesWithExperienceMoreThan(n);
+
+            //    if (result.isSuccess()) {
+
+               //     for (Employee employee : result.getData()) {
+
+                //        System.out.printf("Id: %03d%n",
+                 //               employee.getId());
+
+                  //      System.out.printf("Name: %s%n",
+                   //             employee.getName());
+
+                   //     System.out.printf("HireDate: %s%n",
+                     //           employee.getHireDate());
+
+                    //    System.out.printf("Position: %s%n",
+                    //            employee.getPosition());
+
+                    //    System.out.printf(
+                    //            java.util.Locale.US,
+                    //            "Salary: %10.2f%n",
+                     //           employee.getSalary()
+                     //   );
+
+                     //   System.out.println();
+                 //   }
+
+              //  } else {
+
+              //      System.out.println(
+                 //           result.getErrorMessage()
+                 //   );
+              //  }
+          //  }
+
+
+
+          //  if (choice == 19) {
+
+             //   ServiceResult<Map<String, Long>> result =
+             //           hrmService.getEmployeeCountByPosition();
+
+            //    if (result.isSuccess()) {
+
+             //       for (Map.Entry<String, Long> entry :
+             //               result.getData().entrySet()) {
+
+              //          System.out.println(
+                //                entry.getKey() + ": " + entry.getValue()
+                //        );
+                //    }
+
+            //    } else {
+
+             //       System.out.println(result.getErrorMessage());
+            //    }
+           // }
+
+            // if (choice == 18) {
+
+                //if (!securityService.hasPermission(Permission.EDIT_EMPLOYEES)) {
+                    //System.out.println("Access denied");
+                //} else {
+
+                   // System.out.print("Enter employee id: ");
+                   // Long id = scanner.nextLong();
+
+                   // System.out.print("Enter new salary: ");
+                   // BigDecimal salary = scanner.nextBigDecimal();
+
+                   // hrmService.updateData(id, salary);
+
+                   // System.out.println("Employee salary updated");
+                //}
+            //}
         }
     }
 }

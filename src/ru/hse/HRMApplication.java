@@ -1,10 +1,12 @@
 package ru.hse;
 import ru.hse.model.*;
 import ru.hse.presentation.Reporter;
-import ru.hse.security.SecurityService;
+import ru.hse.security.AuthenticationService;
 import ru.hse.service.HRMService;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
 import ru.hse.model.Employee;
 import ru.hse.model.Manager;
 import ru.hse.model.Programmer;
@@ -12,6 +14,8 @@ import ru.hse.model.Task;
 import ru.hse.model.State;
 import ru.hse.repository.CollectionRepository;
 import ru.hse.util.Logger;
+import ru.hse.security.User;
+import ru.hse.security.Role;
 
 public class HRMApplication {
     public static void main(String[] args) {
@@ -43,7 +47,7 @@ public class HRMApplication {
                 "Backend Java Developer",
                 new BigDecimal("150000"),
                 LocalDate.of(2021, 5, 1),
-                new Task[]{task1, task2},
+                new ArrayList<>(List.of(task1, task2)),
                 Grade.SENIOR
         );
 
@@ -52,7 +56,7 @@ public class HRMApplication {
                 "Mobile Java Developer",
                 new BigDecimal("100000"),
                 LocalDate.of(2023, 2, 1),
-                new Task[]{task3},
+                new ArrayList<>(List.of(task3)),
                 Grade.MIDDLE
         );
 
@@ -61,15 +65,15 @@ public class HRMApplication {
                 "Team Lead",
                 new BigDecimal("165000"),
                 LocalDate.of(2020, 8, 14),
-                new Programmer[]{programmer1, programmer2}
+                new ArrayList<>(List.of(programmer1, programmer2))
         );
 
         Director director1 = new Director(
                 "Matvey K",
                 "Team Lead",
-                new BigDecimal("165000"),
+                new BigDecimal("160000"),
                 LocalDate.of(2020, 8, 14),
-                new Manager[]{manager1}
+                new ArrayList<>(List.of(manager1))
         );
 
         CollectionRepository repository = new CollectionRepository();
@@ -87,8 +91,17 @@ public class HRMApplication {
         repository.saveEmployee(manager1);
         repository.saveEmployee(director1);
 
-        HRMService hrmService = new HRMService(repository);
-        SecurityService securityService = new SecurityService();
+        List<User> users = new ArrayList<>();
+
+        users.add(new User("admin", "123", Role.ADMIN, null));
+        users.add(new User("sysadmin", "123", Role.SYSADMIN, null));
+        users.add(new User("hr", "123", Role.HR_MANAGER, null));
+        users.add(new User("pm", "123", Role.PROJECT_MANAGER, null));
+        users.add(new User("employee", "123", Role.EMPLOYEE, programmer1.getId()));
+
+        AuthenticationService authenticationService = new AuthenticationService(users);
+        HRMService hrmService =
+                new HRMService(repository, authenticationService);
 
 
         java.io.File employeesFile = new java.io.File("employees.dat");
@@ -99,7 +112,7 @@ public class HRMApplication {
         }
 
 
-        Reporter reporter = new Reporter(hrmService, securityService);
+        Reporter reporter = new Reporter(hrmService, authenticationService);
 
         boolean debugMode = false;
 
